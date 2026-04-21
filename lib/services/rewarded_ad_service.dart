@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uz_converter/constants/ad_ids.dart';
+import 'package:uz_converter/constants/feature_flags.dart';
 
 class RewardedAdService {
   RewardedAd? _rewardedAd;
@@ -23,7 +24,8 @@ class RewardedAdService {
     'Har bir ko\'mak muhim — rahmat!',
   ];
 
-  bool get _isSupported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  bool get _isSupported =>
+      FeatureFlags.adsEnabled && !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   void loadAd() {
     if (!_isSupported || _isLoadingAd || _rewardedAd != null) return;
@@ -89,7 +91,7 @@ class RewardedAdService {
   }
 
   void showAd({required VoidCallback onRewarded}) {
-    if (_rewardedAd == null) return;
+    if (!FeatureFlags.adsEnabled || _rewardedAd == null) return;
 
     _rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
