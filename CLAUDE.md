@@ -42,7 +42,7 @@ Multi-screen ilova, `setState` + global `ValueNotifier` (ThemeProvider) bilan st
 - **`lib/providers/theme_provider.dart`** — Global singleton `themeProvider` (ValueNotifier<ThemeMode>), SharedPreferences da persist.
 
 ### Widgets
-- **`lib/widgets/`** — `ConverterTextField`, `SwapButton` (yo'nalish almashtirish), `BannerAdWidget` (AdMob, faqat Android/iOS), `TextStatsWidget` (belgi/so'z soni).
+- **`lib/widgets/`** — `SwapButton` (yo'nalish almashtirish), `BannerAdWidget` (AdMob, faqat Android/iOS — `FeatureFlags.adsEnabled` orqali disabled launch'da).
 
 ### Rang palitrassi
 - **`lib/constants/app_colors.dart`** — Quari-inspired: orange #FF865E (primary accent), purple #9685FF, lightBlue #A2D2FF, cream #FEF9EF. O'zbek bayrog'i ranglari ham saqlanadi (branding uchun).

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'constants/app_colors.dart';
+import 'constants/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_open_ad_service.dart';
@@ -43,49 +41,8 @@ class _YozuAppState extends State<YozuApp> {
           title: 'Yozu',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.orange,
-              brightness: Brightness.light,
-            ),
-            useMaterial3: true,
-            textTheme: GoogleFonts.rubikTextTheme(
-              ThemeData(brightness: Brightness.light).textTheme,
-            ),
-            scaffoldBackgroundColor: AppColors.white,
-            appBarTheme: const AppBarTheme(
-              backgroundColor: AppColors.white,
-              foregroundColor: AppColors.textDark,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              systemOverlayStyle: SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.dark,
-              ),
-            ),
-          ),
-          darkTheme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.orange,
-              brightness: Brightness.dark,
-            ),
-            useMaterial3: true,
-            textTheme: GoogleFonts.rubikTextTheme(
-              ThemeData(brightness: Brightness.dark).textTheme,
-            ),
-            scaffoldBackgroundColor: const Color(0xFF121212),
-            cardTheme: const CardThemeData(color: Color(0xFF1E1E1E)),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Color(0xFF121212),
-              foregroundColor: Colors.white,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              systemOverlayStyle: SystemUiOverlayStyle(
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness: Brightness.light,
-              ),
-            ),
-          ),
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
           home: const SplashScreen(),
         );
       },

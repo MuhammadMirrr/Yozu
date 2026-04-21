@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../constants/app_colors.dart';
+import '../constants/feature_flags.dart';
 import '../providers/theme_provider.dart';
 import '../services/rewarded_ad_service.dart';
+import 'dictionary_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -25,8 +28,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadSettings();
-    _rewardedAdService.loadAd();
-    _loadRewardCounts();
+    if (FeatureFlags.adsEnabled) {
+      _rewardedAdService.loadAd();
+      _loadRewardCounts();
+    }
     _loadPackageInfo();
   }
 
@@ -209,24 +214,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: _clipboardAutoDetect,
                 onChanged: _setClipboardAutoDetect,
               ),
+              ListTile(
+                leading: const Icon(Icons.book_outlined),
+                title: const Text('Shaxsiy lug\'at'),
+                subtitle: const Text(
+                    'Maxsus so\'zlar — ismlar, brendlar, dialekt'),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DictionaryScreen(),
+                    ),
+                  );
+                },
+              ),
               const Divider(),
-              // Qo'llab-quvvatlash bo'limi
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  'Qo\'llab-quvvatlash',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+              // Qo'llab-quvvatlash bo'limi (faqat reklama yoqilganda)
+              if (FeatureFlags.adsEnabled) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Qo\'llab-quvvatlash',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildSupportCard(isDark, colorScheme),
-              ),
-              const Divider(height: 32),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildSupportCard(isDark, colorScheme),
+                ),
+                const Divider(height: 32),
+              ],
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
@@ -246,13 +271,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
               ),
-              ListTile(
-                leading: const Icon(Icons.code),
-                title: const Text('Ishlab chiqaruvchi'),
-                trailing: Text(
-                  'UzB Apps',
-                  style: TextStyle(color: colorScheme.onSurfaceVariant),
-                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: _buildDeveloperCard(isDark, colorScheme),
               ),
               ListTile(
                 leading: const Icon(Icons.star_rate_outlined),
@@ -269,12 +290,185 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   } catch (e) {
                     debugPrint('InAppReview error: $e');
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Baholashda xatolik yuz berdi'),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                        margin: const EdgeInsets.all(16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
                   }
                 },
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _openTelegram() async {
+    final uri = Uri.parse('https://t.me/mirqobilov_mm');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        _showSnack('Telegram ochib bo\'lmadi');
+      }
+    } catch (e) {
+      debugPrint('Telegram launch error: $e');
+      if (mounted) _showSnack('Telegram ochib bo\'lmadi');
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildDeveloperCard(bool isDark, ColorScheme colorScheme) {
+    const telegramBlue = Color(0xFF229ED9);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.orange.withValues(alpha: isDark ? 0.18 : 0.1),
+            AppColors.purple.withValues(alpha: isDark ? 0.12 : 0.06),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: AppColors.orange.withValues(alpha: isDark ? 0.25 : 0.18),
+        ),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      colors: [AppColors.orange, AppColors.purple],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'MM',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ishlab chiqaruvchi',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white54 : AppColors.textLight,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Muhammad Mirqobilov',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : AppColors.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          InkWell(
+            onTap: _openTelegram,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: telegramBlue.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.send_rounded,
+                      color: telegramBlue,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Telegram',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white54 : AppColors.textLight,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@mirqobilov_mm',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : AppColors.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.open_in_new_rounded,
+                    size: 18,
+                    color: isDark ? Colors.white38 : AppColors.textLight,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

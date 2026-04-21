@@ -5,12 +5,21 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_colors.dart';
 import '../models/conversion_record.dart';
+import '../services/dictionary_service.dart';
+import '../services/file_import_service.dart';
 import '../services/history_service.dart';
+import '../services/share_handler_service.dart';
 import '../utils/uzbek_converter.dart';
-import '../widgets/swap_button.dart';
+import '../widgets/action_buttons_row.dart';
 import '../widgets/banner_ad_widget.dart';
+import '../widgets/input_area_widget.dart';
+import '../widgets/language_pill.dart';
+import '../widgets/output_area_widget.dart';
+import '../widgets/recent_section.dart';
+import '../widgets/swap_row.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
+import 'stats_screen.dart';
 
 class ConverterScreen extends StatefulWidget {
   const ConverterScreen({super.key});
@@ -22,16 +31,21 @@ class ConverterScreen extends StatefulWidget {
 class _ConverterScreenState extends State<ConverterScreen> {
   final _inputController = TextEditingController();
   final _outputController = TextEditingController();
-  final _historyService = HistoryService();
+  final _historyService = HistoryService.instance;
+  final _dictionaryService = DictionaryService.instance;
+  Map<String, String> _latinDict = const {};
+  Map<String, String> _cyrillicDict = const {};
   bool _isLatinToCyrillic = true;
   Timer? _debounceTimer;
-  List<ConversionRecord> _recentRecords = [];
+  StreamSubscription<String>? _shareSubscription;
 
   @override
   void initState() {
     super.initState();
-    _inputController.addListener(() => setState(() {}));
-    _loadRecentRecords();
+    _shareSubscription =
+        ShareHandlerService.instance.textStream.listen(_onSharedText);
+    _dictionaryService.addListener(_reloadDictionary);
+    _reloadDictionary();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkOnboarding();
     });
@@ -40,22 +54,31 @@ class _ConverterScreenState extends State<ConverterScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _shareSubscription?.cancel();
+    _dictionaryService.removeListener(_reloadDictionary);
     _inputController.dispose();
     _outputController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRecentRecords() async {
-    try {
-      final records = await _historyService.getRecords();
-      if (mounted) {
-        setState(() {
-          _recentRecords = records.take(6).toList();
-        });
-      }
-    } catch (e) {
-      debugPrint('ConverterScreen: $e');
+  Future<void> _reloadDictionary() async {
+    final latin = await _dictionaryService.getLatinToCyrillicMap();
+    final cyrillic = await _dictionaryService.getCyrillicToLatinMap();
+    if (!mounted) return;
+    setState(() {
+      _latinDict = latin;
+      _cyrillicDict = cyrillic;
+    });
+    // Agar input matni bor bo'lsa, yangi dictionary bilan qayta konvert
+    if (_inputController.text.isNotEmpty) {
+      _onInputChanged(_inputController.text);
     }
+  }
+
+  void _onSharedText(String text) {
+    if (!mounted || text.isEmpty) return;
+    _inputController.text = text;
+    _onInputChanged(text);
   }
 
   Future<void> _checkOnboarding() async {
@@ -75,30 +98,34 @@ class _ConverterScreenState extends State<ConverterScreen> {
   }
 
   Future<void> _showOnboarding() async {
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        icon: const Icon(
-          Icons.translate_rounded,
-          size: 48,
-          color: AppColors.orange,
-        ),
-        title: const Text('Yozu ga xush kelibsiz!'),
-        content: const Text(
-          'Lotincha matn yozing — avtomatik kirillchaga aylanadi.\n\n'
-          'Teskari yo\'nalish uchun ↕ tugmani bosing.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(foregroundColor: AppColors.orange),
-            child: const Text('Boshlash'),
+    try {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          icon: const Icon(
+            Icons.translate_rounded,
+            size: 48,
+            color: AppColors.orange,
           ),
-        ],
-      ),
-    );
+          title: const Text('Yozu ga xush kelibsiz!'),
+          content: const Text(
+            'Lotincha matn yozing — avtomatik kirillchaga aylanadi.\n\n'
+            'Teskari yo\'nalish uchun ↕ tugmani bosing.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(foregroundColor: AppColors.orange),
+              child: const Text('Boshlash'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('ConverterScreen onboarding error: $e');
+    }
   }
 
   Future<void> _checkClipboard() async {
@@ -141,28 +168,15 @@ class _ConverterScreenState extends State<ConverterScreen> {
       }
     } catch (e) {
       debugPrint('ConverterScreen: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Clipboard xatosi yuz berdi'),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
+      if (mounted) _showSnack('Clipboard xatosi yuz berdi');
     }
   }
 
   void _onInputChanged(String text) {
     final output = _isLatinToCyrillic
-        ? UzbekConverter.latinToCyrillic(text)
-        : UzbekConverter.cyrillicToLatin(text);
-
-    setState(() {
-      _outputController.text = output;
-    });
+        ? UzbekConverter.latinToCyrillicWithDict(text, _latinDict)
+        : UzbekConverter.cyrillicToLatinWithDict(text, _cyrillicDict);
+    _outputController.text = output;
 
     _debounceTimer?.cancel();
     if (text.trim().length >= 3) {
@@ -172,7 +186,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
           outputText: output,
           isLatinToCyrillic: _isLatinToCyrillic,
         );
-        _loadRecentRecords();
       });
     }
   }
@@ -184,17 +197,15 @@ class _ConverterScreenState extends State<ConverterScreen> {
       final oldOutput = _outputController.text;
       _inputController.text = oldOutput;
       _outputController.text = _isLatinToCyrillic
-          ? UzbekConverter.latinToCyrillic(oldOutput)
-          : UzbekConverter.cyrillicToLatin(oldOutput);
+          ? UzbekConverter.latinToCyrillicWithDict(oldOutput, _latinDict)
+          : UzbekConverter.cyrillicToLatinWithDict(oldOutput, _cyrillicDict);
     });
   }
 
   void _clearAll() {
     HapticFeedback.selectionClick();
-    setState(() {
-      _inputController.clear();
-      _outputController.clear();
-    });
+    _inputController.clear();
+    _outputController.clear();
   }
 
   void _copyOutput() {
@@ -241,10 +252,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
       }
     }
 
-    if (mounted) {
-      _showSnack('Saqlandi!');
-      _loadRecentRecords();
-    }
+    if (mounted) _showSnack('Saqlandi!');
   }
 
   Future<void> _pasteText() async {
@@ -258,6 +266,24 @@ class _ConverterScreenState extends State<ConverterScreen> {
     } else {
       if (mounted) _showSnack('Clipboard bo\'sh');
     }
+  }
+
+  Future<void> _importFile() async {
+    HapticFeedback.selectionClick();
+    final result = await FileImportService.pickAndReadFile();
+    if (!mounted) return;
+    if (result.isCancelled) return;
+    if (result.isError) {
+      _showSnack(result.errorMessage ?? 'Fayl xatosi');
+      return;
+    }
+    final text = result.text!;
+    _inputController.text = text;
+    _inputController.selection = TextSelection.fromPosition(
+      TextPosition(offset: text.length),
+    );
+    _onInputChanged(text);
+    _showSnack('Fayl yuklandi');
   }
 
   void _showSnack(String message) {
@@ -280,11 +306,10 @@ class _ConverterScreenState extends State<ConverterScreen> {
     if (result != null && mounted) {
       setState(() {
         _isLatinToCyrillic = result.isLatinToCyrillic;
-        _inputController.text = result.inputText;
-        _outputController.text = result.outputText;
       });
+      _inputController.text = result.inputText;
+      _outputController.text = result.outputText;
     }
-    _loadRecentRecords();
   }
 
   void _openSettings() {
@@ -294,18 +319,24 @@ class _ConverterScreenState extends State<ConverterScreen> {
     );
   }
 
+  void _openStats() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StatsScreen()),
+    );
+  }
+
   void _onRecentTap(ConversionRecord record) {
     setState(() {
       _isLatinToCyrillic = record.isLatinToCyrillic;
-      _inputController.text = record.inputText;
-      _outputController.text = record.outputText;
     });
+    _inputController.text = record.inputText;
+    _outputController.text = record.outputText;
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -333,6 +364,14 @@ class _ConverterScreenState extends State<ConverterScreen> {
         actions: [
           IconButton(
             icon: Icon(
+              Icons.bar_chart_rounded,
+              color: isDark ? Colors.white70 : AppColors.textLight,
+            ),
+            tooltip: 'Statistika',
+            onPressed: _openStats,
+          ),
+          IconButton(
+            icon: Icon(
               Icons.history_rounded,
               color: isDark ? Colors.white70 : AppColors.textLight,
             ),
@@ -358,36 +397,42 @@ class _ConverterScreenState extends State<ConverterScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 4),
-                  // Source language pill
-                  _buildLanguagePill(
+                  LanguagePill(
                     label: _isLatinToCyrillic ? 'Lotin' : 'Кирилл',
                     color: AppColors.purple,
-                    isDark: isDark,
                   ),
                   const SizedBox(height: 8),
-                  // Input area
-                  _buildInputArea(isDark, colorScheme),
+                  InputAreaWidget(
+                    controller: _inputController,
+                    isLatinToCyrillic: _isLatinToCyrillic,
+                    onChanged: _onInputChanged,
+                    onPaste: _pasteText,
+                    onClear: _clearAll,
+                    onImport: _importFile,
+                  ),
                   const SizedBox(height: 4),
-                  // Swap row
-                  _buildSwapRow(isDark, colorScheme),
+                  SwapRow(onSwap: _swapDirection),
                   const SizedBox(height: 4),
-                  // Target language pill
-                  _buildLanguagePill(
+                  LanguagePill(
                     label: _isLatinToCyrillic ? 'Кирилл' : 'Lotin',
                     color: AppColors.lightBlue,
-                    isDark: isDark,
                   ),
                   const SizedBox(height: 8),
-                  // Output area
-                  _buildOutputArea(isDark, colorScheme),
+                  OutputAreaWidget(controller: _outputController),
                   const SizedBox(height: 20),
-                  // Action circles (Quari-style)
-                  _buildActionCircles(isDark),
-                  // Recent conversions
-                  if (_recentRecords.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    _buildRecentSection(isDark, colorScheme),
-                  ],
+                  AnimatedBuilder(
+                    animation: _outputController,
+                    builder: (context, _) {
+                      return ActionButtonsRow(
+                        hasOutput: _outputController.text.isNotEmpty,
+                        onCopy: _copyOutput,
+                        onShare: _shareResult,
+                        onSave: _saveToFavorites,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  RecentSection(onTap: _onRecentTap),
                   const SizedBox(height: 12),
                 ],
               ),
@@ -397,394 +442,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
           const SizedBox(height: 4),
         ],
       ),
-    );
-  }
-
-  Widget _buildLanguagePill({
-    required String label,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Semantics(
-      label: '$label tili tanlangan',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isDark ? color.withValues(alpha: 0.9) : color,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputArea(bool isDark, ColorScheme colorScheme) {
-    final bgColor = isDark
-        ? colorScheme.surfaceContainerHighest
-        : AppColors.cream;
-    final inputText = _inputController.text;
-    final charCount = inputText.length;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        children: [
-          TextFormField(
-            controller: _inputController,
-            onChanged: _onInputChanged,
-            maxLines: 4,
-            minLines: 2,
-            maxLength: 10000,
-            maxLengthEnforcement: MaxLengthEnforcement.enforced,
-            buildCounter: (context,
-                {required currentLength,
-                required isFocused,
-                required maxLength}) {
-              if (currentLength > 9000) {
-                return Text('$currentLength / $maxLength');
-              }
-              return null;
-            },
-            keyboardType: TextInputType.multiline,
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? Colors.white : AppColors.textDark,
-              height: 1.4,
-            ),
-            decoration: InputDecoration(
-              hintText: _isLatinToCyrillic
-                  ? 'Lotincha yozing...'
-                  : 'Кириллча ёзинг...',
-              hintStyle: TextStyle(
-                color: isDark ? Colors.white38 : AppColors.textLight,
-              ),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 4),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              // Paste icon
-              _buildMiniAction(
-                icon: Icons.content_paste_rounded,
-                onTap: _pasteText,
-                isDark: isDark,
-                tooltip: 'Qo\'yish',
-              ),
-              const SizedBox(width: 8),
-              // Clear icon
-              _buildMiniAction(
-                icon: Icons.close_rounded,
-                onTap: inputText.isNotEmpty ? _clearAll : null,
-                isDark: isDark,
-                tooltip: 'Tozalash',
-              ),
-              const Spacer(),
-              // Character count
-              AnimatedOpacity(
-                opacity: inputText.isNotEmpty ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: Text(
-                  '$charCount ta belgi',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white38 : AppColors.textLight,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniAction({
-    required IconData icon,
-    VoidCallback? onTap,
-    required bool isDark,
-    String? tooltip,
-  }) {
-    final color = onTap != null
-        ? (isDark ? Colors.white54 : AppColors.textLight)
-        : (isDark ? Colors.white24 : AppColors.cardBorder);
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18, color: color),
-      tooltip: tooltip,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-      splashRadius: 20,
-    );
-  }
-
-  Widget _buildSwapRow(bool isDark, ColorScheme colorScheme) {
-    return SizedBox(
-      height: 48,
-      child: Row(
-        children: [
-          Expanded(
-            child: Divider(
-              color: isDark ? Colors.white12 : AppColors.cardBorder,
-            ),
-          ),
-          const SizedBox(width: 12),
-          SwapButton(onTap: _swapDirection),
-          const SizedBox(width: 12),
-          Icon(
-            Icons.translate_rounded,
-            size: 14,
-            color: isDark ? Colors.white38 : AppColors.textLight,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Konvert',
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.white38 : AppColors.textLight,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Divider(
-              color: isDark ? Colors.white12 : AppColors.cardBorder,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOutputArea(bool isDark, ColorScheme colorScheme) {
-    final bgColor = isDark
-        ? colorScheme.surfaceContainerHighest
-        : AppColors.cream;
-    final outputText = _outputController.text;
-    final charCount = outputText.length;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          TextFormField(
-            controller: _outputController,
-            readOnly: true,
-            maxLines: 4,
-            minLines: 2,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white : AppColors.textDark,
-              height: 1.4,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Natija shu yerda ko\'rinadi',
-              hintStyle: TextStyle(
-                color: isDark ? Colors.white38 : AppColors.textLight,
-              ),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 4),
-            ),
-          ),
-          const SizedBox(height: 4),
-          AnimatedOpacity(
-            opacity: outputText.isNotEmpty ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: Text(
-              '$charCount ta belgi',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white38 : AppColors.textLight,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionCircles(bool isDark) {
-    final hasOutput = _outputController.text.isNotEmpty;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Nusxa (Copy) — light purple
-        _buildActionCircle(
-          icon: Icons.copy_rounded,
-          label: 'Nusxa',
-          color: AppColors.lightBlue,
-          size: 48,
-          iconSize: 20,
-          onTap: hasOutput ? _copyOutput : null,
-          isDark: isDark,
-        ),
-        const SizedBox(width: 24),
-        // Ulashish (Share) — orange, bigger (Quari center button)
-        _buildActionCircle(
-          icon: Icons.share_rounded,
-          label: 'Ulashish',
-          color: AppColors.orange,
-          size: 58,
-          iconSize: 24,
-          onTap: hasOutput ? _shareResult : null,
-          isDark: isDark,
-        ),
-        const SizedBox(width: 24),
-        // Saqlash (Save) — purple
-        _buildActionCircle(
-          icon: Icons.star_rounded,
-          label: 'Saqlash',
-          color: AppColors.purple,
-          size: 48,
-          iconSize: 20,
-          onTap: hasOutput ? _saveToFavorites : null,
-          isDark: isDark,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionCircle({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required double size,
-    required double iconSize,
-    VoidCallback? onTap,
-    required bool isDark,
-  }) {
-    final isDisabled = onTap == null;
-    final circleColor = isDisabled
-        ? (isDark ? Colors.white12 : AppColors.cardBorder)
-        : color;
-
-    return Semantics(
-      button: true,
-      label: label,
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: isDisabled
-                      ? circleColor
-                      : circleColor.withValues(alpha: isDark ? 0.25 : 1.0),
-                  shape: BoxShape.circle,
-                  boxShadow: isDisabled
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: circleColor.withValues(alpha: 0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                ),
-                child: Icon(
-                  icon,
-                  size: iconSize,
-                  color: isDisabled
-                      ? (isDark ? Colors.white24 : AppColors.textLight)
-                      : (isDark ? color : Colors.white),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: isDisabled
-                      ? (isDark ? Colors.white24 : AppColors.textLight)
-                      : (isDark ? Colors.white70 : AppColors.textDark),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentSection(bool isDark, ColorScheme colorScheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Oxirgi konvertatsiyalar',
-          style: TextStyle(
-            fontSize: 13,
-            color: isDark ? Colors.white38 : AppColors.textLight,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _recentRecords.map((record) {
-            final input = record.inputText.length > 12
-                ? '${record.inputText.substring(0, 12)}…'
-                : record.inputText;
-            final output = record.outputText.length > 12
-                ? '${record.outputText.substring(0, 12)}…'
-                : record.outputText;
-
-            return GestureDetector(
-              onTap: () => _onRecentTap(record),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : AppColors.cream,
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : AppColors.cardBorder,
-                    width: 0.5,
-                  ),
-                ),
-                child: Text(
-                  '$input → $output',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white60 : AppColors.textDark,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
     );
   }
 }

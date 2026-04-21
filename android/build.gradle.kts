@@ -3,6 +3,24 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // Barcha subprojectlar uchun JVM 17'ni majbur qilish
+    // (receive_sharing_intent kabi eski pluginlar 1.8 ishlatadi)
+    afterEvaluate {
+        if (extensions.findByName("android") != null) {
+            extensions.configure<com.android.build.gradle.BaseExtension>("android") {
+                compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
+                }
+            }
+        }
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
+        }
+    }
 }
 
 val newBuildDir: Directory =
