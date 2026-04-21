@@ -1,11 +1,11 @@
 {
-    "name": "Yozu",
+    "name": "Yozu — Lotin ↔ Kirill konverter",
     "short_name": "Yozu",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "Yozu — O'zbek Lotin-Kirill konverter ilovasi",
+    "background_color": "#FEF9EF",
+    "theme_color": "#FF865E",
+    "description": "Yozu — O'zbek Lotin-Kirill real-time matn konverteri",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
