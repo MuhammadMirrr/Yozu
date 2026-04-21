@@ -10,7 +10,7 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  final _historyService = HistoryService();
+  final _historyService = HistoryService.instance;
   List<ConversionRecord> _records = [];
   bool _isLoading = true;
 
