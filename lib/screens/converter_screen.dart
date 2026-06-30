@@ -392,7 +392,10 @@ class _ConverterScreenState extends State<ConverterScreen> {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 4),
@@ -434,6 +437,8 @@ class _ConverterScreenState extends State<ConverterScreen> {
                   RecentSection(onTap: _onRecentTap),
                   const SizedBox(height: 12),
                 ],
+                  ),
+                ),
               ),
             ),
           ),

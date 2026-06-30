@@ -1,7 +1,7 @@
 name: uz_converter
 description: "Yozu — O'zbek Lotin-Kirill konverter ilovasi"
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.1+4
 
 environment:
   sdk: ^3.10.7
