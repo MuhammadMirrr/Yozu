@@ -11,7 +11,6 @@ import '../services/history_service.dart';
 import '../services/share_handler_service.dart';
 import '../utils/uzbek_converter.dart';
 import '../widgets/action_buttons_row.dart';
-import '../widgets/banner_ad_widget.dart';
 import '../widgets/input_area_widget.dart';
 import '../widgets/language_pill.dart';
 import '../widgets/output_area_widget.dart';
@@ -438,7 +437,6 @@ class _ConverterScreenState extends State<ConverterScreen> {
               ),
             ),
           ),
-          const BannerAdWidget(),
           const SizedBox(height: 4),
         ],
       ),
