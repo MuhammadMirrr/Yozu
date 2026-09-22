@@ -166,4 +166,4 @@ flutter build appbundle
 
 ## License
 
-MIT © [MuhammadMirrr](https://github.com/MuhammadMirrr) — see [LICENSE](LICENSE).
+MIT © [Muhammad Mirqobilov](https://mirqobilov.com/about) (Mirkabilov) · [@MuhammadMirrr](https://github.com/MuhammadMirrr) — see [LICENSE](LICENSE).
