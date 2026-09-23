@@ -72,3 +72,8 @@ yaratilganda tahrirlanadi. **Har yangi versiya yaratilganda App Store Connect'da
 Sabab: Google'da shaxsiy brendni bitta kanonik sahifaga (`mirqobilov.com/about`,
 Person `@id`) bog'lash. Release checklist'iga shu bandni qo'shing va versiyani
 yuborishdan oldin ikkala URL to'ldirilganini tekshiring.
+
+> **Holat (2026-09-23):** App Store Connect'da iOS va macOS uchun **1.0.2** qoralama versiyalari
+> ochilgan, ikkalasida Support/Marketing URL allaqachon `https://mirqobilov.com/about`.
+> Keyingi build versiyasi `1.0.2` bo'lsin (pubspec: `version: 1.0.2+N`) — yoki qoralamadagi
+> versiya raqamini buildga moslab o'zgartiring.
